@@ -1,46 +1,44 @@
-const fs = require('fs');
 const path = require('path');
-const os = require('os');
+const fs   = require('fs');
 const express = require('express');
+const { Server } = require('socket.io');
+
 const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
 
-const exeDir = path.dirname(process.execPath)
+// Pega a pasta onde o exe está rodando (ou, em dev, cai pra processo normal)
+const baseDir = process.pkg
+  ? path.dirname(process.execPath)
+  : __dirname;
 
-// função que encontra o primeiro IPv4 não-interno
-function getLocalExternalIP() {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return 'localhost';
+// caminhos absolutos pros arquivos externos
+const currentTxt = path.join(baseDir, 'current.txt');
+const pautasJson = path.join(baseDir, 'pautas.json');
+const publicDir  = path.join(baseDir, 'public');
+
+// serve a pasta public que agora é externa
+app.use(express.static(publicDir));
+
+let current = '';
+try {
+  current = fs.readFileSync(currentTxt, 'utf8');
+} catch (err) {
+  console.warn('Não achei current.txt, iniciando vazio');
 }
 
-const TXT_PATH = path.join(process.cwd(), 'current.txt');
-const PORT = process.env.PORT || 3000;
-
-// garante que exista o arquivo
-if (!fs.existsSync(TXT_PATH)) {
-  fs.writeFileSync(TXT_PATH, '', 'utf8');
-}
-
-app.use(express.static(path.join(exeDir, 'public')));
-
-io.on('connection', socket => {
-  const current = fs.readFileSync(TXT_PATH, 'utf8');
-  socket.emit('update', current);
-  socket.on('select', text => {
-    fs.writeFileSync(TXT_PATH, text, 'utf8');
-    io.emit('update', text);
-  });
+const server = app.listen(3000, () => {
+  console.log('ouvindo na porta 3000');
 });
 
-http.listen(PORT, '0.0.0.0', () => {
-  const ip = getLocalExternalIP();
-  console.log(`Servidor rodando em http://${ip}:${PORT}/`);
+const io = new Server(server);
+
+io.on('connection', socket => {
+  // ao conectar, já dispara o valor atual
+  socket.emit('update', current);
+
+  socket.on('select', text => {
+    current = text;
+    // escreve de volta pro arquivo externo
+    fs.writeFileSync(currentTxt, current, 'utf8');
+    io.emit('update', current);
+  });
 });
