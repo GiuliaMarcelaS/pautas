@@ -6,6 +6,8 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
+const exeDir = path.dirname(process.execPath)
+
 // função que encontra o primeiro IPv4 não-interno
 function getLocalExternalIP() {
   const nets = os.networkInterfaces();
@@ -27,7 +29,7 @@ if (!fs.existsSync(TXT_PATH)) {
   fs.writeFileSync(TXT_PATH, '', 'utf8');
 }
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(exeDir, 'public')));
 
 io.on('connection', socket => {
   const current = fs.readFileSync(TXT_PATH, 'utf8');
